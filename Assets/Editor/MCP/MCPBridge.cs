@@ -13,8 +13,7 @@ namespace UnityMCP
     public static class MCPBridge
     {
         private static MCPServer _server;
-        private static GetLogsCommand _logsCommand;
-        private static ExecMenuCommand _menuCommand;
+        private static ToolRegistry _registry;
         private static bool _initialized;
 
         // Cached values (must be read on main thread, then used from background thread)
@@ -46,16 +45,15 @@ namespace UnityMCP
             // Initialize WindowWaker on main thread
             WindowWaker.Initialize();
 
-            // Create command handlers
-            _logsCommand = new GetLogsCommand();
-            _menuCommand = new ExecMenuCommand();
+            // Create and initialize tool registry
+            _registry = new ToolRegistry();
+            _registry.DiscoverTools();
 
             // Create and configure server
             _server = new MCPServer
             {
                 OnPing = HandlePing,
-                OnGetLogs = _logsCommand.Handle,
-                OnExecMenu = _menuCommand.Handle
+                Registry = _registry
             };
 
             // Start server
@@ -99,10 +97,17 @@ namespace UnityMCP
                 _server = null;
             }
 
-            if (_logsCommand != null)
+            // Dispose tools that implement IDisposable
+            if (_registry != null)
             {
-                _logsCommand.Dispose();
-                _logsCommand = null;
+                foreach (var tool in _registry.GetAllTools())
+                {
+                    if (tool is IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
+                }
+                _registry = null;
             }
 
             // Remove instance file

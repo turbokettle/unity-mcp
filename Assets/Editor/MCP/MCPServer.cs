@@ -27,10 +27,11 @@ namespace UnityMCP
         private readonly ConcurrentDictionary<int, TcpClient> _clients = new ConcurrentDictionary<int, TcpClient>();
         private int _clientIdCounter;
 
-        // Command handlers
+        // Tool registry for dynamic tool discovery
+        public ToolRegistry Registry { get; set; }
+
+        // Ping handler (still needed for connection validation)
         public Func<MCPRequest, MCPResponse> OnPing;
-        public Func<MCPRequest, MCPResponse> OnGetLogs;
-        public Func<MCPRequest, MCPResponse> OnExecMenu;
 
         public int Port => _port;
         public bool IsRunning => _running;
@@ -204,7 +205,7 @@ namespace UnityMCP
             }
 
             // Check if command requires main thread
-            if (request.RequiresMainThread)
+            if (request.RequiresMainThread(Registry))
             {
                 // Queue for main thread and wake window if minimized
                 _mainThreadQueue.Enqueue(new PendingRequest
@@ -234,11 +235,11 @@ namespace UnityMCP
                     case "ping":
                         return OnPing?.Invoke(request) ?? MCPResponse.Error(request.id, "Ping handler not registered");
 
-                    case "get_logs":
-                        return OnGetLogs?.Invoke(request) ?? MCPResponse.Error(request.id, "GetLogs handler not registered");
+                    case "list_tools":
+                        return HandleListTools(request);
 
-                    case "exec_menu":
-                        return OnExecMenu?.Invoke(request) ?? MCPResponse.Error(request.id, "ExecMenu handler not registered");
+                    case "invoke_tool":
+                        return HandleInvokeTool(request);
 
                     default:
                         return MCPResponse.Error(request.id, $"Unknown command: {request.cmd}");
@@ -249,6 +250,38 @@ namespace UnityMCP
                 Debug.LogError($"[MCP] Command '{request.cmd}' failed: {e.Message}\n{e.StackTrace}");
                 return MCPResponse.Error(request.id, $"Command failed: {e.Message}");
             }
+        }
+
+        private MCPResponse HandleListTools(MCPRequest request)
+        {
+            if (Registry == null)
+            {
+                return MCPResponse.Error(request.id, "Tool registry not initialized");
+            }
+
+            var toolList = Registry.GetToolList();
+            return MCPResponse.Success(request.id, toolList);
+        }
+
+        private MCPResponse HandleInvokeTool(MCPRequest request)
+        {
+            if (Registry == null)
+            {
+                return MCPResponse.Error(request.id, "Tool registry not initialized");
+            }
+
+            var invokeParams = request.GetParams<InvokeToolParams>();
+            if (invokeParams == null || string.IsNullOrEmpty(invokeParams.tool))
+            {
+                return MCPResponse.Error(request.id, "Missing 'tool' parameter");
+            }
+
+            if (!Registry.TryGetTool(invokeParams.tool, out var tool))
+            {
+                return MCPResponse.Error(request.id, $"Unknown tool: {invokeParams.tool}");
+            }
+
+            return tool.Execute(request.id, invokeParams.arguments);
         }
 
         private void SendResponse(NetworkStream stream, MCPResponse response)

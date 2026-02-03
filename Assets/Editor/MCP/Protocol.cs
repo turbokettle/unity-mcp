@@ -18,9 +18,25 @@ namespace UnityMCP
             return JsonUtility.FromJson<T>(@params);
         }
 
-        public bool RequiresMainThread =>
-            cmd == "exec_menu" ||
-            cmd == "recompile";
+        /// <summary>
+        /// Determines if this request requires main thread execution.
+        /// For invoke_tool commands, looks up the tool in the registry.
+        /// </summary>
+        public bool RequiresMainThread(ToolRegistry registry)
+        {
+            if (cmd == "invoke_tool" && registry != null)
+            {
+                var invokeParams = GetParams<InvokeToolParams>();
+                if (invokeParams != null && !string.IsNullOrEmpty(invokeParams.tool))
+                {
+                    if (registry.TryGetTool(invokeParams.tool, out var tool))
+                    {
+                        return tool.RequiresMainThread;
+                    }
+                }
+            }
+            return false;
+        }
     }
 
     [Serializable]
@@ -54,18 +70,12 @@ namespace UnityMCP
         public string ToJson() => JsonUtility.ToJson(this);
     }
 
-    // Parameter types for commands
+    // Parameter types for invoke_tool command
     [Serializable]
-    public class GetLogsParams
+    public class InvokeToolParams
     {
-        public int count = 50;
-        public string filter = "all"; // "all", "errors", "warnings"
-    }
-
-    [Serializable]
-    public class ExecMenuParams
-    {
-        public string path;
+        public string tool;
+        public string arguments; // JSON string of tool-specific parameters
     }
 
     // Response data types
@@ -97,6 +107,23 @@ namespace UnityMCP
         public string status;
         public string unityVersion;
         public string projectName;
+    }
+
+    // Dynamic tool registration types
+    [Serializable]
+    public class ToolListResponse
+    {
+        public int version;
+        public List<ToolInfo> tools = new List<ToolInfo>();
+    }
+
+    [Serializable]
+    public class ToolInfo
+    {
+        public string name;
+        public string description;
+        public bool requiresMainThread;
+        public string parameterSchema; // JSON Schema as string
     }
 
     // Instance info written to Library/MCPInstance.json

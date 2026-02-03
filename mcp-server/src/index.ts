@@ -7,8 +7,7 @@ import {
   isProcessRunning,
 } from "./unity-finder.js";
 import { UnityConnection } from "./unity-connection.js";
-import { readLogsSchema, readLogs } from "./tools/read-logs.js";
-import { executeMenuSchema, executeMenu } from "./tools/execute-menu.js";
+import { DynamicToolManager } from "./dynamic-tools.js";
 import {
   waitForEditorReadySchema,
   waitForEditorReady,
@@ -28,6 +27,7 @@ const explicitProjectPath = getProjectPath();
 
 let unity: UnityConnection | null = null;
 let lastKnownPid: number | null = null;
+let toolManager: DynamicToolManager | null = null;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -77,6 +77,12 @@ async function ensureConnection(): Promise<UnityConnection> {
         if (mcpInstance) {
           lastKnownPid = mcpInstance.pid;
         }
+
+        // Sync tools on successful connection
+        if (toolManager) {
+          await toolManager.syncTools(unity);
+        }
+
         return unity;
       }
     } catch {
@@ -103,6 +109,12 @@ async function ensureConnection(): Promise<UnityConnection> {
       if (mcpInstance) {
         lastKnownPid = mcpInstance.pid;
       }
+
+      // Sync tools on successful connection
+      if (toolManager) {
+        await toolManager.syncTools(unity);
+      }
+
       return unity;
     }
 
@@ -124,100 +136,17 @@ async function main() {
     version: "1.0.0",
   });
 
-  // Register read_console_logs tool
-  server.tool(
-    "read_console_logs",
-    "Read Unity Editor console logs.",
-    readLogsSchema.shape,
-    async (params) => {
-      try {
-        const conn = await ensureConnection();
-        const parsed = readLogsSchema.parse(params);
-        const result = await readLogs(conn, parsed);
-        return {
-          content: [{ type: "text", text: result }],
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-          content: [{ type: "text", text: `Error: ${message}` }],
-          isError: true,
-        };
-      }
-    }
-  );
+  // Create the dynamic tool manager
+  toolManager = new DynamicToolManager(server, {
+    projectPath: explicitProjectPath,
+    getConnection: () => unity,
+    setConnection: (conn) => {
+      unity = conn;
+      setupConnectionHandlers(conn);
+    },
+  });
 
-  // Register execute_menu_item tool
-  server.tool(
-    "execute_menu_item",
-    "Execute a Unity Editor menu item by its path. Use this to trigger Unity actions like saving scenes, refreshing assets, etc.",
-    executeMenuSchema.shape,
-    async (params) => {
-      try {
-        const conn = await ensureConnection();
-        const parsed = executeMenuSchema.parse(params);
-        const result = await executeMenu(conn, parsed);
-
-        // If this menu item triggers refresh, wait for Unity to be ready
-        const triggersRefresh = REFRESH_MENU_ITEMS.some(
-          (item) => parsed.path.toLowerCase() === item.toLowerCase()
-        );
-
-        if (triggersRefresh) {
-          // Small delay to ensure domain reload has started
-          await sleep(500);
-
-          const projectRoot = explicitProjectPath || findProjectRoot();
-          const { result: waitResult, connection } = await waitForEditorReady(
-            { timeout_seconds: 60 },
-            projectRoot || undefined,
-            unity
-          );
-
-          // Update connection if we got a new one
-          if (connection && waitResult.status === "ready") {
-            if (unity && unity !== connection) {
-              unity.disconnect();
-            }
-            unity = connection;
-            setupConnectionHandlers(unity);
-          }
-
-          if (waitResult.status !== "ready") {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `${result}\n\nWarning: Unity may still be reloading (${waitResult.lastError || waitResult.message}).`,
-                },
-              ],
-            };
-          }
-
-          return {
-            content: [
-              {
-                type: "text",
-                text: `${result}\n\nUnity reloaded and ready (waited ${waitResult.waitTimeMs}ms).`,
-              },
-            ],
-          };
-        }
-
-        return {
-          content: [{ type: "text", text: result }],
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-          content: [{ type: "text", text: `Error: ${message}` }],
-          isError: true,
-        };
-      }
-    }
-  );
-
-  // Register wait_for_editor_ready tool
+  // Register wait_for_editor_ready tool (static - works without Unity connection)
   server.tool(
     "wait_for_editor_ready",
     "Wait for Unity Editor to become ready after domain reload (script recompilation or asset refresh). Use this after modifying scripts or assets to ensure Unity has finished reloading before executing other commands.",
@@ -239,6 +168,11 @@ async function main() {
           }
           unity = connection;
           setupConnectionHandlers(unity);
+
+          // Sync tools when connection is established
+          if (toolManager) {
+            await toolManager.syncTools(unity);
+          }
         }
 
         if (result.status === "ready") {
@@ -284,6 +218,15 @@ async function main() {
   console.error(`[MCP] Project root: ${projectRoot || "not found"}`);
   if (explicitProjectPath) {
     console.error(`[MCP] (using explicit --project path)`);
+  }
+
+  // Try to connect to Unity and sync tools at startup
+  try {
+    const conn = await ensureConnection();
+    console.error(`[MCP] Connected to Unity, synced ${toolManager.getRegisteredTools().length} dynamic tools`);
+  } catch (error) {
+    console.error(`[MCP] Could not connect to Unity at startup: ${error instanceof Error ? error.message : error}`);
+    console.error(`[MCP] Dynamic tools will be synced when Unity becomes available`);
   }
 
   // Start the server with stdio transport
