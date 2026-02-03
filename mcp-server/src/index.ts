@@ -4,6 +4,10 @@ import { findUnityConnection, findProjectRoot } from "./unity-finder.js";
 import { UnityConnection } from "./unity-connection.js";
 import { readLogsSchema, readLogs } from "./tools/read-logs.js";
 import { executeMenuSchema, executeMenu } from "./tools/execute-menu.js";
+import {
+  waitForEditorReadySchema,
+  waitForEditorReady,
+} from "./tools/wait-for-editor-ready.js";
 
 // Parse --project argument if provided, otherwise use cwd
 function getProjectPath(): string | undefined {
@@ -99,6 +103,74 @@ async function main() {
         return {
           content: [{ type: "text", text: result }],
         };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: `Error: ${message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // Register wait_for_editor_ready tool
+  server.tool(
+    "wait_for_editor_ready",
+    "Wait for Unity Editor to become ready after domain reload (script recompilation). Use this after modifying scripts to ensure Unity has finished reloading before executing other commands.",
+    waitForEditorReadySchema.shape,
+    async (params) => {
+      try {
+        const parsed = waitForEditorReadySchema.parse(params);
+        const projectRoot = explicitProjectPath || findProjectRoot() || undefined;
+        const { result, connection } = await waitForEditorReady(
+          parsed,
+          projectRoot,
+          unity
+        );
+
+        // Update global connection if we got a new one
+        if (connection && result.status === "ready" && !result.wasAlreadyConnected) {
+          if (unity && unity !== connection) {
+            unity.disconnect();
+          }
+          unity = connection;
+
+          unity.on("close", () => {
+            console.error("[MCP] Unity connection lost, will reconnect on next request");
+            unity = null;
+          });
+          unity.on("error", (err) => {
+            console.error(`[MCP] Unity connection error: ${err.message}`);
+          });
+        }
+
+        if (result.status === "ready") {
+          const lines = [
+            `Unity Editor is ready.`,
+            `Was already connected: ${result.wasAlreadyConnected}`,
+            `Wait time: ${result.waitTimeMs}ms`,
+          ];
+          if (result.port) lines.push(`Port: ${result.port}`);
+
+          return {
+            content: [{ type: "text", text: lines.join("\n") }],
+          };
+        } else if (result.status === "timeout") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Timeout waiting for Unity Editor (${result.waitTimeMs}ms).\nLast error: ${result.lastError}`,
+              },
+            ],
+            isError: true,
+          };
+        } else {
+          return {
+            content: [{ type: "text", text: `Error: ${result.message}` }],
+            isError: true,
+          };
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return {
