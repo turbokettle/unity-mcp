@@ -1,6 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { findUnityConnection, findProjectRoot } from "./unity-finder.js";
+import {
+  findUnityConnection,
+  findProjectRoot,
+  readMCPInstance,
+  isProcessRunning,
+} from "./unity-finder.js";
 import { UnityConnection } from "./unity-connection.js";
 import { readLogsSchema, readLogs } from "./tools/read-logs.js";
 import { executeMenuSchema, executeMenu } from "./tools/execute-menu.js";
@@ -22,43 +27,95 @@ function getProjectPath(): string | undefined {
 const explicitProjectPath = getProjectPath();
 
 let unity: UnityConnection | null = null;
+let lastKnownPid: number | null = null;
 
-async function ensureConnection(): Promise<UnityConnection> {
-  if (unity?.isConnected) {
-    return unity;
-  }
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  const projectRoot = explicitProjectPath || findProjectRoot();
-  const connectionInfo = findUnityConnection(projectRoot || undefined);
-  if (!connectionInfo) {
-    throw new Error(
-      "Unity Editor not found. Make sure Unity is running with the MCP plugin loaded." +
-      (projectRoot ? ` (looking in: ${projectRoot})` : "")
-    );
-  }
+// Menu items that trigger domain reload
+const REFRESH_MENU_ITEMS = ["Assets/Refresh", "Assets/Reimport All"];
 
-  unity = new UnityConnection(connectionInfo.port);
-
-  unity.on("close", () => {
+function setupConnectionHandlers(conn: UnityConnection): void {
+  conn.on("close", () => {
     console.error("[MCP] Unity connection lost, will reconnect on next request");
     unity = null;
   });
-
-  unity.on("error", (err) => {
+  conn.on("error", (err) => {
     console.error(`[MCP] Unity connection error: ${err.message}`);
   });
+}
 
-  await unity.connect();
-
-  // Verify connection with ping
-  const pingOk = await unity.ping();
-  if (!pingOk) {
-    unity.disconnect();
+async function ensureConnection(): Promise<UnityConnection> {
+  // Try existing connection first
+  if (unity?.isConnected) {
+    try {
+      if (await unity.ping()) {
+        return unity;
+      }
+    } catch {
+      // Connection stale, continue to reconnect
+    }
     unity = null;
-    throw new Error("Failed to verify connection to Unity (ping failed)");
   }
 
-  return unity;
+  const projectRoot = explicitProjectPath || findProjectRoot();
+
+  // Try quick connect (MCPInstance.json exists)
+  const connectionInfo = findUnityConnection(projectRoot || undefined);
+
+  if (connectionInfo) {
+    // Normal path: MCPInstance.json exists
+    unity = new UnityConnection(connectionInfo.port);
+    setupConnectionHandlers(unity);
+
+    try {
+      await unity.connect();
+      if (await unity.ping()) {
+        // Cache PID on successful connection
+        const mcpInstance = readMCPInstance(projectRoot!);
+        if (mcpInstance) {
+          lastKnownPid = mcpInstance.pid;
+        }
+        return unity;
+      }
+    } catch {
+      unity.disconnect();
+      unity = null;
+    }
+  }
+
+  // MCPInstance.json missing or connection failed - check if Unity is reloading
+  if (lastKnownPid && isProcessRunning(lastKnownPid)) {
+    // Unity process alive but MCP server not ready → wait for reload
+    console.error("[MCP] Unity process alive, waiting for domain reload to complete...");
+    const { result, connection } = await waitForEditorReady(
+      { timeout_seconds: 60 },
+      projectRoot || undefined,
+      null
+    );
+
+    if (result.status === "ready" && connection) {
+      unity = connection;
+      setupConnectionHandlers(unity);
+      // Update cached PID
+      const mcpInstance = readMCPInstance(projectRoot!);
+      if (mcpInstance) {
+        lastKnownPid = mcpInstance.pid;
+      }
+      return unity;
+    }
+
+    throw new Error(
+      `Unity is reloading but didn't recover: ${result.lastError || result.message}`
+    );
+  }
+
+  // No cached PID or process dead → fail fast
+  throw new Error(
+    "Unity Editor not found. Make sure Unity is running with the MCP plugin loaded." +
+      (projectRoot ? ` (looking in: ${projectRoot})` : "")
+  );
 }
 
 async function main() {
@@ -100,6 +157,53 @@ async function main() {
         const conn = await ensureConnection();
         const parsed = executeMenuSchema.parse(params);
         const result = await executeMenu(conn, parsed);
+
+        // If this menu item triggers refresh, wait for Unity to be ready
+        const triggersRefresh = REFRESH_MENU_ITEMS.some(
+          (item) => parsed.path.toLowerCase() === item.toLowerCase()
+        );
+
+        if (triggersRefresh) {
+          // Small delay to ensure domain reload has started
+          await sleep(500);
+
+          const projectRoot = explicitProjectPath || findProjectRoot();
+          const { result: waitResult, connection } = await waitForEditorReady(
+            { timeout_seconds: 60 },
+            projectRoot || undefined,
+            unity
+          );
+
+          // Update connection if we got a new one
+          if (connection && waitResult.status === "ready") {
+            if (unity && unity !== connection) {
+              unity.disconnect();
+            }
+            unity = connection;
+            setupConnectionHandlers(unity);
+          }
+
+          if (waitResult.status !== "ready") {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `${result}\n\nWarning: Unity may still be reloading (${waitResult.lastError || waitResult.message}).`,
+                },
+              ],
+            };
+          }
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `${result}\n\nUnity reloaded and ready (waited ${waitResult.waitTimeMs}ms).`,
+              },
+            ],
+          };
+        }
+
         return {
           content: [{ type: "text", text: result }],
         };
@@ -134,14 +238,7 @@ async function main() {
             unity.disconnect();
           }
           unity = connection;
-
-          unity.on("close", () => {
-            console.error("[MCP] Unity connection lost, will reconnect on next request");
-            unity = null;
-          });
-          unity.on("error", (err) => {
-            console.error(`[MCP] Unity connection error: ${err.message}`);
-          });
+          setupConnectionHandlers(unity);
         }
 
         if (result.status === "ready") {

@@ -15,7 +15,7 @@ export interface EditorInstanceInfo {
 /**
  * Check if a process with the given PID is running.
  */
-function isProcessRunning(pid: number): boolean {
+export function isProcessRunning(pid: number): boolean {
   try {
     // Sending signal 0 checks if process exists without killing it
     process.kill(pid, 0);
