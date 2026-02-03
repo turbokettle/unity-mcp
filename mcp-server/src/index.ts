@@ -5,6 +5,18 @@ import { UnityConnection } from "./unity-connection.js";
 import { readLogsSchema, readLogs } from "./tools/read-logs.js";
 import { executeMenuSchema, executeMenu } from "./tools/execute-menu.js";
 
+// Parse --project argument if provided, otherwise use cwd
+function getProjectPath(): string | undefined {
+  const args = process.argv.slice(2);
+  const projectIdx = args.indexOf("--project");
+  if (projectIdx !== -1 && args[projectIdx + 1]) {
+    return args[projectIdx + 1];
+  }
+  return undefined; // Will use cwd
+}
+
+const explicitProjectPath = getProjectPath();
+
 let unity: UnityConnection | null = null;
 
 async function ensureConnection(): Promise<UnityConnection> {
@@ -12,10 +24,12 @@ async function ensureConnection(): Promise<UnityConnection> {
     return unity;
   }
 
-  const connectionInfo = findUnityConnection();
+  const projectRoot = explicitProjectPath || findProjectRoot();
+  const connectionInfo = findUnityConnection(projectRoot || undefined);
   if (!connectionInfo) {
     throw new Error(
-      "Unity Editor not found. Make sure Unity is running with the MCP plugin loaded."
+      "Unity Editor not found. Make sure Unity is running with the MCP plugin loaded." +
+      (projectRoot ? ` (looking in: ${projectRoot})` : "")
     );
   }
 
@@ -96,9 +110,12 @@ async function main() {
   );
 
   // Log startup info
-  const projectRoot = findProjectRoot();
+  const projectRoot = explicitProjectPath || findProjectRoot();
   console.error(`[MCP] Unity MCP Server starting...`);
   console.error(`[MCP] Project root: ${projectRoot || "not found"}`);
+  if (explicitProjectPath) {
+    console.error(`[MCP] (using explicit --project path)`);
+  }
 
   // Start the server with stdio transport
   const transport = new StdioServerTransport();
