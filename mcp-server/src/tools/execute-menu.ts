@@ -6,7 +6,7 @@ export const executeMenuSchema = z.object({
     .string()
     .min(1)
     .describe(
-      "Menu item path (e.g., 'File/Save Scene', 'Edit/Play', 'Assets/Refresh')"
+      "Menu item path (e.g., 'File/Save Scene', 'Assets/Refresh')"
     ),
 });
 

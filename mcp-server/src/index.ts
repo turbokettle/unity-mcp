@@ -70,7 +70,7 @@ async function main() {
   // Register read_console_logs tool
   server.tool(
     "read_console_logs",
-    "Read Unity Editor console logs. Returns recent log messages including errors, warnings, and info logs.",
+    "Read Unity Editor console logs.",
     readLogsSchema.shape,
     async (params) => {
       try {
@@ -93,7 +93,7 @@ async function main() {
   // Register execute_menu_item tool
   server.tool(
     "execute_menu_item",
-    "Execute a Unity Editor menu item by its path. Use this to trigger Unity actions like saving scenes, refreshing assets, entering play mode, etc.",
+    "Execute a Unity Editor menu item by its path. Use this to trigger Unity actions like saving scenes, refreshing assets, etc.",
     executeMenuSchema.shape,
     async (params) => {
       try {
@@ -116,7 +116,7 @@ async function main() {
   // Register wait_for_editor_ready tool
   server.tool(
     "wait_for_editor_ready",
-    "Wait for Unity Editor to become ready after domain reload (script recompilation). Use this after modifying scripts to ensure Unity has finished reloading before executing other commands.",
+    "Wait for Unity Editor to become ready after domain reload (script recompilation or asset refresh). Use this after modifying scripts or assets to ensure Unity has finished reloading before executing other commands.",
     waitForEditorReadySchema.shape,
     async (params) => {
       try {

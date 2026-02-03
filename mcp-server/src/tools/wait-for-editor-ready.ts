@@ -8,11 +8,11 @@ export const waitForEditorReadySchema = z.object({
   timeout_seconds: z
     .number()
     .int()
-    .min(5)
-    .max(120)
+    .min(15)
+    .max(300)
     .optional()
-    .default(30)
-    .describe("Maximum time to wait for Unity to become ready (5-120 seconds)"),
+    .default(60)
+    .describe("Maximum time to wait for Unity to become ready (15-300 seconds)"),
 });
 
 export type WaitForEditorReadyInput = z.infer<typeof waitForEditorReadySchema>;

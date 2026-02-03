@@ -14,7 +14,7 @@ export const readLogsSchema = z.object({
     .enum(["all", "errors", "warnings"])
     .optional()
     .default("all")
-    .describe("Filter logs by type"),
+    .describe("Filter logs by log level"),
 });
 
 export type ReadLogsInput = z.infer<typeof readLogsSchema>;
