@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "unity": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["mcp-server/dist/index.js"]
+    },
+    "denoSandbox": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "github:saksofonists/mcp-deno-simple",
+        "--allow-read=E:/unity-mcp",
+        "--allow-write=E:/unity-mcp",
+        "--deny-net",
+        "--deny-run",
+        "--deny-env",
+        "--deny-ffi",
+        "--deny-sys"
+      ]
+    },
+    "printscreen": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "github:saksofonists/printscreen-mcp"
+      ]
+    }
+  }
+}

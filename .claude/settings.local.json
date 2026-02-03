@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npm install)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "unity",
+    "denoSandbox",
+    "printscreen"
+  ]
+}
