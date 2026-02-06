@@ -29,3 +29,4 @@ desktop.ini
 
 # Misc
 *.log
+.claude/settings.local.json
