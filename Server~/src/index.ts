@@ -9,10 +9,7 @@ import {
 } from "./unity-finder.js";
 import { UnityConnection } from "./unity-connection.js";
 import { DynamicToolManager } from "./dynamic-tools.js";
-import {
-  waitForEditorReadySchema,
-  waitForEditorReady,
-} from "./tools/wait-for-editor-ready.js";
+import { waitForEditorReady } from "./tools/wait-for-editor-ready.js";
 
 // Parse --project argument if provided, otherwise use cwd
 function getProjectPath(): string | undefined {
@@ -29,13 +26,6 @@ const explicitProjectPath = getProjectPath();
 let unity: UnityConnection | null = null;
 let lastKnownPid: number | null = null;
 let toolManager: DynamicToolManager | null = null;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Menu items that trigger domain reload
-const REFRESH_MENU_ITEMS = ["Assets/Refresh", "Assets/Reimport All"];
 
 function setupConnectionHandlers(conn: UnityConnection): void {
   conn.on("close", () => {
@@ -145,73 +135,8 @@ async function main() {
       unity = conn;
       setupConnectionHandlers(conn);
     },
+    ensureConnection,
   });
-
-  // Register wait_for_editor_ready tool (static - works without Unity connection)
-  server.tool(
-    "wait_for_editor_ready",
-    "Wait for Unity Editor to become ready after domain reload (script recompilation or asset refresh). Use this after modifying scripts or assets to ensure Unity has finished reloading before executing other commands.",
-    waitForEditorReadySchema.shape,
-    async (params) => {
-      try {
-        const parsed = waitForEditorReadySchema.parse(params);
-        const projectRoot = explicitProjectPath || findProjectRoot() || undefined;
-        const { result, connection } = await waitForEditorReady(
-          parsed,
-          projectRoot,
-          unity
-        );
-
-        // Update global connection if we got a new one
-        if (connection && result.status === "ready" && !result.wasAlreadyConnected) {
-          if (unity && unity !== connection) {
-            unity.disconnect();
-          }
-          unity = connection;
-          setupConnectionHandlers(unity);
-
-          // Sync tools when connection is established
-          if (toolManager) {
-            await toolManager.syncTools(unity);
-          }
-        }
-
-        if (result.status === "ready") {
-          const lines = [
-            `Unity Editor is ready.`,
-            `Was already connected: ${result.wasAlreadyConnected}`,
-            `Wait time: ${result.waitTimeMs}ms`,
-          ];
-          if (result.port) lines.push(`Port: ${result.port}`);
-
-          return {
-            content: [{ type: "text", text: lines.join("\n") }],
-          };
-        } else if (result.status === "timeout") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Timeout waiting for Unity Editor (${result.waitTimeMs}ms).\nLast error: ${result.lastError}`,
-              },
-            ],
-            isError: true,
-          };
-        } else {
-          return {
-            content: [{ type: "text", text: `Error: ${result.message}` }],
-            isError: true,
-          };
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-          content: [{ type: "text", text: `Error: ${message}` }],
-          isError: true,
-        };
-      }
-    }
-  );
 
   // Log startup info
   const projectRoot = explicitProjectPath || findProjectRoot();

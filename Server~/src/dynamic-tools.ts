@@ -34,10 +34,6 @@ interface JsonSchema {
 // Menu items that trigger domain reload
 const REFRESH_MENU_ITEMS = ["Assets/Refresh", "Assets/Reimport All"];
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Manages dynamic tool registration from Unity.
  * Fetches tool definitions from Unity's ToolRegistry and registers them with the MCP server.
@@ -49,6 +45,7 @@ export class DynamicToolManager {
   private projectPath: string | undefined;
   private getConnection: () => UnityConnection | null;
   private setConnection: (conn: UnityConnection) => void;
+  private ensureConnection: () => Promise<UnityConnection>;
 
   constructor(
     server: McpServer,
@@ -56,12 +53,14 @@ export class DynamicToolManager {
       projectPath?: string;
       getConnection: () => UnityConnection | null;
       setConnection: (conn: UnityConnection) => void;
+      ensureConnection: () => Promise<UnityConnection>;
     }
   ) {
     this.server = server;
     this.projectPath = options.projectPath;
     this.getConnection = options.getConnection;
     this.setConnection = options.setConnection;
+    this.ensureConnection = options.ensureConnection;
   }
 
   /**
@@ -110,13 +109,18 @@ export class DynamicToolManager {
       tool.description,
       zodSchema,
       async (params) => {
-        // Get fresh connection on each invocation (not captured at registration time)
-        const connection = this.getConnection();
+        // Get fresh connection, auto-reconnecting if needed (e.g. during domain reload)
+        let connection = this.getConnection();
         if (!connection || !connection.isConnected) {
-          return {
-            content: [{ type: "text", text: "Error: Not connected to Unity" }],
-            isError: true,
-          };
+          try {
+            connection = await this.ensureConnection();
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return {
+              content: [{ type: "text", text: `Error: ${message}` }],
+              isError: true,
+            };
+          }
         }
         return this.invokeUnityTool(tool.name, params, connection);
       }

@@ -4,7 +4,7 @@ import { UnityConnection } from "../unity-connection.js";
 import * as fs from "fs";
 import * as path from "path";
 
-export const waitForEditorReadySchema = z.object({
+const waitForEditorReadySchema = z.object({
   timeout_seconds: z
     .number()
     .int()

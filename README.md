@@ -71,7 +71,6 @@ The MCP server auto-discovers your Unity project by walking up from the current 
 | `read_console_logs` | Read Unity console logs with filtering (all/errors/warnings) |
 | `execute_menu_item` | Execute Unity menu items by path (e.g., "File/Save Scene") |
 | `get_project_info` | Get project name, Unity version, scene info, play mode state |
-| `wait_for_editor_ready` | Wait for Unity to finish domain reload after script changes |
 
 ## Adding Custom Tools
 
@@ -115,7 +114,7 @@ If your custom tools are in an assembly definition, add a reference to `com.turb
 ## Troubleshooting
 
 **"Not connected to Unity" errors**
-Unity briefly disconnects during domain reload (script recompilation). The server auto-reconnects. Use `wait_for_editor_ready` after triggering recompilation.
+Unity briefly disconnects during domain reload (script recompilation). The server automatically waits for Unity to finish reloading when a tool is invoked. If the error persists, check that Unity is running and the MCP plugin is loaded.
 
 **New tools not appearing**
 Claude Code caches the MCP tool list at startup. Restart Claude Code after adding new tools to Unity.

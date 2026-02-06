@@ -114,7 +114,7 @@ The tool will be automatically discovered on Unity domain reload and registered 
 New tools added during a Claude Code session won't be visible until Claude is restarted. This is because Claude Code caches the MCP tool list at startup and doesn't refresh it mid-session, even when the MCP server signals that tools have changed.
 
 ### Domain Reload Disconnection
-When Unity recompiles scripts, the TCP connection is briefly lost. The MCP server automatically reconnects, but there may be a short window where tools return "Not connected to Unity" errors. Use `wait_for_editor_ready` after triggering recompilation to ensure Unity is ready.
+When Unity recompiles scripts, the TCP connection is briefly lost. The MCP server automatically waits for Unity to finish reloading when the next tool is invoked, so no manual intervention is needed.
 
 ## Communication Protocol
 
