@@ -65,7 +65,6 @@ The MCP server auto-discovers your Unity project by walking up from the current 
 | `read_console_logs` | Read Unity console logs with filtering (all/errors/warnings) |
 | `execute_menu_item` | Execute Unity menu items by path (e.g., "File/Save Scene") |
 | `get_project_info` | Get project name, Unity version, scene info, play mode state |
-| `ping_unity` | Check if Unity is responsive |
 | `wait_for_editor_ready` | Wait for Unity to finish domain reload after script changes |
 
 ## Adding Custom Tools

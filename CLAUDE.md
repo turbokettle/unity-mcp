@@ -49,8 +49,7 @@ unity-mcp/
 │   └── Tools/
 │       ├── GetLogsTool.cs
 │       ├── ExecMenuTool.cs
-│       ├── GetProjectInfoTool.cs
-│       └── PingUnityTool.cs
+│       └── GetProjectInfoTool.cs
 ├── Server~/              # MCP server (hidden from Unity's asset importer)
 │   ├── package.json      # npm package (@turbokettle/unity-mcp)
 │   ├── tsconfig.json
