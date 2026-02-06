@@ -1,6 +1,6 @@
 {
   "name": "@turbokettle/unity-mcp",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "MCP server for Unity Editor integration with Claude Code",
   "type": "module",
   "main": "dist/index.js",
