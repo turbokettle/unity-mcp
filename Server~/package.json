@@ -1,0 +1,41 @@
+{
+  "name": "@turbokettle/unity-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Unity Editor integration with Claude Code",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "unity-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "unity",
+    "claude",
+    "ai",
+    "editor"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/turbokettle/unity-mcp.git",
+    "directory": "Server~"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  }
+}

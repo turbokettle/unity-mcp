@@ -1,0 +1,19 @@
+{
+  "name": "com.turbokettle.unity-mcp",
+  "version": "1.0.0",
+  "displayName": "Unity MCP",
+  "description": "Model Context Protocol bridge for Unity Editor - enables AI tools like Claude Code to interact with Unity",
+  "unity": "6000.0",
+  "keywords": [
+    "mcp",
+    "claude",
+    "ai",
+    "editor",
+    "tools"
+  ],
+  "author": {
+    "name": "TurboKettle",
+    "url": "https://github.com/turbokettle"
+  },
+  "type": "tool"
+}
