@@ -2,6 +2,12 @@
 
 Model Context Protocol (MCP) bridge for Unity Editor — enables AI tools like [Claude Code](https://docs.anthropic.com/en/docs/claude-code) to interact with the Unity Editor.
 
+> **Work in progress** — this project is under active development and the API may change between versions. Expect rough edges.
+
+## Why another Unity MCP?
+
+The goal of this project is a **minimal, focused API** that helps with real work instead of throwing 100 MCP tools at the context window and hoping that the LLM figures it out. This is designed for low context usage with sharp, and precise tools for a human-in-the-loop workflow.
+
 ## How It Works
 
 This project has two components:
